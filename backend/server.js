@@ -12,6 +12,7 @@ import farmerRoutes from './src/routes/farmerRoutes.js';
 import orderRoutes from './src/routes/orderRoutes.js';
 import marketRoutes from './src/routes/marketRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js';
+import aiRoutes from './src/routes/aiRoutes.js';
 
 // Initialize environment variables
 dotenv.config();
@@ -67,6 +68,7 @@ app.use('/api/farmers', farmerRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/market', marketRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Error Handling Middleware
 app.use(notFound);
