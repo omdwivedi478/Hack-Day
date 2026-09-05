@@ -1,4 +1,4 @@
-# FarmDirect 🌾
+ # FarmDirect 🌾
 
 > **"Multiple intermediaries reduce farmers' earnings and increase consumer prices."**
 > FarmDirect is a digital agricultural marketplace that directly connects farmers with buyers, delivering radical price transparency, direct escrow payouts, market intelligence, and collective procurement.
