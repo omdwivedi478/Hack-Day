@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getStorage, setStorage } from '../utils/storage';
+import { apiClient } from '../utils/apiClient';
 
 const buyerDefault = {
   id: 'user-buyer-1',
@@ -40,6 +41,29 @@ export const AuthProvider = ({ children }) => {
     setStorage(USER_STORAGE_KEY, user);
   }, [user]);
 
+  // Attempt session restore if JWT token exists
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = apiClient.getToken();
+      if (!token) return;
+
+      try {
+        const res = await apiClient.get('/auth/me');
+        if (res.success && res.user) {
+          setUser(prev => ({
+            ...prev,
+            ...res.user,
+            role: res.user.role || prev.role
+          }));
+        }
+      } catch {
+        // Fallback silently if offline
+      }
+    };
+
+    checkAuth();
+  }, []);
+
   const switchRole = (newRole) => {
     if (newRole === 'Farmer') {
       setUser(farmerDefault);
@@ -55,7 +79,40 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
+  const loginWithCredentials = async (email, password) => {
+    try {
+      const response = await apiClient.post('/auth/login', { email, password });
+      if (response.success && response.token) {
+        apiClient.setToken(response.token);
+        if (response.user) {
+          login(response.user);
+        }
+        return { success: true, user: response.user };
+      }
+      return { success: false, message: response.message || 'Login failed' };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const registerWithCredentials = async (registerData) => {
+    try {
+      const response = await apiClient.post('/auth/register', registerData);
+      if (response.success && response.token) {
+        apiClient.setToken(response.token);
+        if (response.user) {
+          login(response.user);
+        }
+        return { success: true, user: response.user };
+      }
+      return { success: false, message: response.message || 'Registration failed' };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
   const logout = () => {
+    apiClient.setToken(null);
     setUser(buyerDefault);
   };
 
@@ -66,6 +123,8 @@ export const AuthProvider = ({ children }) => {
       isFarmer: user?.role === 'Farmer',
       switchRole,
       login,
+      loginWithCredentials,
+      registerWithCredentials,
       logout,
       setUser
     }}>

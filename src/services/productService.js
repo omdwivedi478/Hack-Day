@@ -1,5 +1,6 @@
 import { initialProducts } from '../data/mockProducts';
 import { getStorage, setStorage } from '../utils/storage';
+import { apiClient } from '../utils/apiClient';
 
 const STORAGE_KEY = 'farmdirect_products';
 
@@ -15,6 +16,20 @@ export const productService = {
 
   saveProducts: (products) => {
     setStorage(STORAGE_KEY, products);
+  },
+
+  // Async API sync with offline fallback
+  fetchProductsFromAPI: async () => {
+    try {
+      const response = await apiClient.get('/products');
+      if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+        productService.saveProducts(response.data);
+        return response.data;
+      }
+    } catch (e) {
+      console.warn('[ProductService] Backend offline, using cached/mock products:', e.message);
+    }
+    return productService.getProducts();
   },
 
   addProduct: (productData) => {
@@ -40,6 +55,10 @@ export const productService = {
     };
     const updated = [newProduct, ...products];
     productService.saveProducts(updated);
+
+    // Asynchronously notify backend
+    apiClient.post('/products', newProduct).catch(() => {});
+
     return newProduct;
   },
 
@@ -47,6 +66,10 @@ export const productService = {
     const products = productService.getProducts();
     const updated = products.map(p => (p.id === id ? { ...p, ...updates } : p));
     productService.saveProducts(updated);
+
+    // Asynchronously sync to backend
+    apiClient.put(`/products/${id}`, updates).catch(() => {});
+
     return updated.find(p => p.id === id);
   },
 
@@ -54,6 +77,10 @@ export const productService = {
     const products = productService.getProducts();
     const updated = products.filter(p => p.id !== id);
     productService.saveProducts(updated);
+
+    // Asynchronously sync to backend
+    apiClient.delete(`/products/${id}`).catch(() => {});
+
     return true;
   }
 };

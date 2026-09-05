@@ -1,6 +1,7 @@
 import { initialOrders } from '../data/mockOrders';
 import { initialTransactions } from '../data/mockTransactions';
 import { getStorage, setStorage } from '../utils/storage';
+import { apiClient } from '../utils/apiClient';
 
 const ORDERS_KEY = 'farmdirect_orders';
 const TRANSACTIONS_KEY = 'farmdirect_transactions';
@@ -12,11 +13,25 @@ export const orderService = {
 
   getOrderById: (id) => {
     const orders = orderService.getOrders();
-    return orders.find(o => o.id === id) || null;
+    return orders.find(o => o.id === id || o.orderNumber === id || o._id === id) || null;
   },
 
   saveOrders: (orders) => {
     setStorage(ORDERS_KEY, orders);
+  },
+
+  // Async API sync with offline fallback
+  fetchOrdersFromAPI: async () => {
+    try {
+      const response = await apiClient.get('/orders');
+      if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+        orderService.saveOrders(response.data);
+        return response.data;
+      }
+    } catch (e) {
+      console.warn('[OrderService] Backend offline, using cached/mock orders:', e.message);
+    }
+    return orderService.getOrders();
   },
 
   createOrder: (orderData) => {
@@ -24,15 +39,16 @@ export const orderService = {
     const orderId = `FD-${Math.floor(10000 + Math.random() * 90000)}`;
     const newOrder = {
       id: orderId,
+      orderNumber: orderId,
       orderDate: new Date().toISOString(),
       status: 'Pending',
       ...orderData,
       timeline: [
-        { step: 'Order Confirmed', time: 'Just now', completed: true, current: true, description: 'Order verified & payment processed' },
-        { step: 'Farmer Preparing', time: 'Awaiting farmer', completed: false, current: false, description: 'Harvesting, grading & crating' },
-        { step: 'Picked Up', time: 'Pending', completed: false, current: false, description: 'Refrigerated van pickup' },
-        { step: 'Out for Delivery', time: 'Pending', completed: false, current: false, description: 'Last-mile dispatch' },
-        { step: 'Delivered', time: 'Pending', completed: false, current: false, description: 'Handover at doorstep' }
+        { step: 'Order Confirmed', time: 'Just now', completed: true, current: true, description: 'Order verified & payment held in escrow' },
+        { step: 'Farmer Preparing', time: 'Awaiting farmer', completed: false, current: false, description: 'Harvesting, grading & crating produce' },
+        { step: 'Picked Up', time: 'Pending', completed: false, current: false, description: 'Refrigerated agri-van pickup' },
+        { step: 'Out for Delivery', time: 'Pending', completed: false, current: false, description: 'Direct doorstep dispatch' },
+        { step: 'Delivered', time: 'Pending', completed: false, current: false, description: 'Handover complete & escrow released' }
       ]
     };
 
@@ -55,13 +71,16 @@ export const orderService = {
     };
     setStorage(TRANSACTIONS_KEY, [newTxn, ...transactions]);
 
+    // Asynchronously notify backend
+    apiClient.post('/orders', newOrder).catch(() => {});
+
     return newOrder;
   },
 
   updateOrderStatus: (orderId, newStatus) => {
     const orders = orderService.getOrders();
     const updated = orders.map(order => {
-      if (order.id !== orderId) return order;
+      if (order.id !== orderId && order.orderNumber !== orderId) return order;
 
       const updatedTimeline = order.timeline.map((step, idx) => {
         if (newStatus === 'Pending') {
@@ -87,7 +106,11 @@ export const orderService = {
     });
 
     orderService.saveOrders(updated);
-    return updated.find(o => o.id === orderId);
+
+    // Asynchronously sync to backend
+    apiClient.put(`/orders/${orderId}/status`, { status: newStatus }).catch(() => {});
+
+    return updated.find(o => o.id === orderId || o.orderNumber === orderId);
   },
 
   getTransactions: () => {

@@ -21,6 +21,41 @@ export const MarketplaceProvider = ({ children }) => {
   // Transactions
   const [transactions, setTransactions] = useState(() => orderService.getTransactions());
 
+  // Initial background sync from backend API
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncWithBackend = async () => {
+      try {
+        const [apiProducts, apiFarmers, apiOrders] = await Promise.allSettled([
+          productService.fetchProductsFromAPI(),
+          farmerService.fetchFarmersFromAPI(),
+          orderService.fetchOrdersFromAPI()
+        ]);
+
+        if (!isMounted) return;
+
+        if (apiProducts.status === 'fulfilled' && apiProducts.value?.length > 0) {
+          setProducts(apiProducts.value);
+        }
+        if (apiFarmers.status === 'fulfilled' && apiFarmers.value?.length > 0) {
+          setFarmers(apiFarmers.value);
+        }
+        if (apiOrders.status === 'fulfilled' && apiOrders.value?.length > 0) {
+          setOrders(apiOrders.value);
+        }
+      } catch (err) {
+        console.warn('[MarketplaceContext] Initial API sync failed, continuing with cached data:', err);
+      }
+    };
+
+    syncWithBackend();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Sync to services on state change
   useEffect(() => {
     productService.saveProducts(products);
